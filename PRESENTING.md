@@ -26,16 +26,46 @@ and what to say.
 
 ## Before the talk
 
-- [ ] Run the README setup on the presenting laptop, then run every demo command once, so the
-      models and `.cache/` exist and nothing downloads live.
-- [ ] Set `GROQ_API_KEY` in your shell profile (`~/.zshrc`) **before** you start presenting or
-      recording, so the key never appears on screen. Never run `echo $GROQ_API_KEY` on camera.
+- [ ] Run the README setup on the presenting laptop, then run every demo command once and click
+      through every UI tab once, so the models and `.cache/` exist and nothing downloads live.
+- [ ] Check that `.env` contains `GROQ_API_KEY`. Never open `.env` or run `echo $GROQ_API_KEY`
+      on screen or on camera.
 - [ ] Record the backup video (below).
-- [ ] Use a large terminal font, a dark background, and a window about 120 columns wide (the
+- [ ] Terminal: use a large font, a dark background, and a window about 120 columns wide (the
       `search` output is wide). Run `clear` between commands.
+- [ ] UI: zoom the browser to about 125–150% (Cmd + plus) so the back row can read it, and close
+      other tabs.
 - [ ] Put the repo link on the last slide so people can follow along later.
 
 ## The demo (Jerry, about 6 minutes)
+
+You can run it in the **terminal** or in the **web UI**. Both use the same code and tell the same
+story in the same six steps. Pick one for the live demo and practice it. A good split: use the
+UI, because its side-by-side answers and tables read well on a projector, and open the terminal
+once at the end to show that it's just a few Python commands people can rerun.
+
+**Starting either one:**
+```bash
+cd Rag-Demo-Tech-Talk
+conda deactivate                  # only if your prompt shows (base)
+source .venv/bin/activate         # your prompt should start with (.venv)
+streamlit run app.py              # for the UI: opens http://localhost:8501
+```
+The key is read from `.env`, so you don't need to export anything. Open the UI a few minutes
+before your part: the first page load spends about 10 seconds loading the models.
+
+### Option A: web UI
+
+| Step | Tab | Do this | Point at |
+|---|---|---|---|
+| 1. The problem | Ask | Keep the first example (postdoc extension) and "Also ask the LLM with no sources" checked. Click **Ask**. | Left: confident, says 30 days, may invent a policy or office. Right: **90 days**, cited, with a link to the policy. "Same model. The only difference is the sources." |
+| 2. Chunks | Ask | Open "The 5 chunks retrieved". | Each chunk has a title > section header and whole paragraphs. That's what the LLM saw. |
+| 3. Retrieval | Compare retrieval | Pick "Is ITAR relevant to my lab?". | Vector search: the animal-care policy (wrong). Keyword: Export Controls #1. Hybrid: Export Controls only at #5. Reranker: moves it to #1. |
+| 4. Grounded answer | Ask | (Already shown in step 1.) Point back to the citations and the "Gate: passed" line. | The `[1]` in the answer matches the source link. |
+| 5. Refusing to guess | Ask | Pick "How do I get a parking permit?". You can uncheck the comparison box. Click **Ask**. | Yellow referral box. "Gate: … failed, so the LLM was not called." |
+| 6. Measuring it | Evaluation | Click **Run the evaluation** (about 30 s; click it before your part to warm the cache). Then drag the slider to 0.001. | 16/20 → 20/20 ranked #1 with the reranker. At 0.03: 6/6 off-topic referred, 3 real questions missed. At 0.001: off-topic questions get answered. "We chose to refer rather than guess." |
+
+### Option B: terminal
 
 Copy and paste these, in order. Each block says what to point at.
 
@@ -95,9 +125,10 @@ policy never says "laptop" or "China".
 
 Record after the models are cached and the key is set, so there's no waiting and no secrets on screen.
 
-1. Open the terminal with a big font, then press **Cmd+Shift+5** (macOS) and choose "Record Selected
-   Portion" around the terminal window. QuickTime's "New Screen Recording" also works.
-2. Run the six commands above in order, saying what you'd say live. Pause briefly on each output.
+1. Open the terminal or the UI (zoomed in), then press **Cmd+Shift+5** (macOS) and choose "Record
+   Selected Portion" around that window. QuickTime's "New Screen Recording" also works.
+2. Run the six steps above in order, using whichever option you'll present live, and say what you'd
+   say live. Pause briefly on each output.
 3. Keep it under about 6 minutes. If the first `search` or `ask` is slow, cut the wait in editing.
 4. Put the video on the presenting laptop itself, not only in the cloud, and test that it plays.
 
@@ -106,8 +137,9 @@ If it comes up, say so and point at the citations and links.
 
 ## If something breaks live
 
-- **The Groq API fails or the Wi-Fi drops:** switch to the video. Commands 2, 3, 5 and 6 work
-  offline, so you can also keep going live and play only the video's commands 1 and 4.
+- **The Groq API fails or the Wi-Fi drops:** switch to the video. Steps 2, 3, 5 and 6 work
+  offline (in the UI too), so you can also keep going live and play only the video's steps 1 and 4.
+- **The UI won't load or freezes:** switch to the terminal (Option B). It shows the same steps.
 - **A command is slow:** the models weren't cached. Keep talking. It's about a minute, once.
 - **A rate limit error:** Groq's free tier limits requests per minute. Wait a moment or switch to the video.
 - **The answer looks different from rehearsal:** normal. Point at the citations, not the wording.

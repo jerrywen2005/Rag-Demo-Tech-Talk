@@ -42,8 +42,22 @@ gitignored, so your key is never committed. Without a key, everything except the
 | [`ingest.py`](ingest.py) | Stage 0: downloads the policies and saves them as Markdown (already done for you) |
 | [`rag.py`](rag.py) | The pipeline itself, one section per stage. **Read this one.** |
 | [`demo.py`](demo.py) | Command-line commands that run each stage and print what happened |
+| [`app.py`](app.py) | A simple web UI for the same pipeline (`streamlit run app.py`) |
 | [`data/policies.json`](data/policies.json) | The 16 policies, with their headings kept |
 | [`data/eval.json`](data/eval.json) | 26 test questions with the policy that should answer each |
+
+## Web UI
+
+```bash
+streamlit run app.py      # opens http://localhost:8501
+```
+
+The UI runs the same code as `demo.py` and has three tabs:
+- **Ask:** the LLM without sources and with RAG, side by side, plus the gate decision, the sources and the 5 retrieved chunks
+- **Compare retrieval:** the top 5 from vector, keyword, hybrid and reranked search
+- **Evaluation:** the results table, plus a slider to try different gate thresholds
+
+The walkthrough below uses the terminal commands, because they show each stage on its own.
 
 ## Walkthrough
 
