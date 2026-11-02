@@ -204,6 +204,9 @@ This demo is the core pipeline. In Nora, the same stages run inside a FastAPI + 
 
 ## Troubleshooting
 
+- **`ModuleNotFoundError: No module named 'openai'`** (or any other package): you're not in the
+  virtual environment. Run `source .venv/bin/activate` (and `conda deactivate` first if your prompt
+  shows `(base)`). Your prompt should start with `(.venv)`.
 - **`NOTE: Redirects are currently not supported in MacOs`** is a harmless PyTorch message.
 - **The first run is slow:** it downloads the models and embeds the chunks. Later runs reuse
   `~/.cache/huggingface` and `.cache/`.
