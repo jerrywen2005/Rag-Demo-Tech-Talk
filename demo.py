@@ -3,6 +3,7 @@
     python demo.py nosources "question"    # stage 1: LLM with no sources
     python demo.py chunks                  # stage 2: how the policies were split
     python demo.py search "question"       # stages 3-5: compare retrieval methods
+    python demo.py ask "question"          # stages 6-7: the full pipeline
 """
 
 import argparse
@@ -38,6 +39,18 @@ def cmd_search(args):
         print_hits(index.search(args.question, mode))
 
 
+def cmd_ask(args):
+    result = rag.ask(rag.Index(), args.question)
+    print("Retrieved (reranker score):")
+    print_hits(result["hits"])
+    print(f"\nOutcome: {result['outcome']}\n")
+    print(result["answer"])
+    if result["cited"]:
+        print("\nSources:")
+        for chunk in result["cited"]:
+            print(f"  - {chunk.doc['title']} > {chunk.section}\n    {chunk.doc['source_url']}")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(required=True)
@@ -55,6 +68,10 @@ def main():
     p.add_argument("question")
     p.add_argument("--mode", choices=rag.MODES, help="show only one method")
     p.set_defaults(func=cmd_search)
+
+    p = sub.add_parser("ask", help="stages 6-7: the full pipeline, answer with citations")
+    p.add_argument("question")
+    p.set_defaults(func=cmd_ask)
 
     args = parser.parse_args()
     args.func(args)
