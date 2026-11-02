@@ -13,12 +13,12 @@ os.environ.setdefault("HF_HUB_VERBOSITY", "error")
 os.environ.setdefault("TRANSFORMERS_VERBOSITY", "error")
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
-import anthropic
 import numpy as np
+from openai import OpenAI
 from rank_bm25 import BM25Okapi
 from sentence_transformers import CrossEncoder, SentenceTransformer
 
-LLM_MODEL = os.environ.get("RAG_LLM_MODEL", "claude-opus-5-5")
+LLM_MODEL = os.environ.get("RAG_LLM_MODEL", "openai/gpt-oss-20b")  # served by Groq (free tier)
 EMBED_MODEL = "BAAI/bge-small-en-v1.5"  # small, free, runs on a laptop CPU
 QUERY_PREFIX = "Represent this sentence for searching relevant passages: "  # bge wants this on queries
 # Free and local. We tried the smaller cross-encoder/ms-marco-MiniLM-L-6-v2 first: it ranked worse on
@@ -39,25 +39,17 @@ def load_policies():
 
 
 def have_llm_key() -> bool:
-    return bool(os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN"))
+    return bool(os.environ.get("GROQ_API_KEY"))
 
 
 def call_llm(system: str, user: str) -> str:
-    """Send one message to Claude. Without an API key, print the prompt instead so you can still follow."""
+    """Send one message to the LLM. Without an API key, print the prompt instead so you can still follow."""
     if not have_llm_key():
-        return f"(No ANTHROPIC_API_KEY set, so here is the prompt that would be sent.)\n\nSYSTEM:\n{system}\n\nUSER:\n{user}"
-    response = anthropic.Anthropic().beta.messages.create(
-        model=LLM_MODEL,
-        max_tokens=16000,
-        output_config={"effort": "low"},  # short Q&A doesn't need deep thinking
-        betas=["server-side-fallback-2026-07-01"],
-        fallbacks="default",  # if the model declines, the API retries on a fallback model
-        system=system,
-        messages=[{"role": "user", "content": user}],
-    )
-    if response.stop_reason == "refusal":
-        return "(The model declined to answer.)"
-    return "".join(block.text for block in response.content if block.type == "text")
+        return f"(No GROQ_API_KEY set, so here is the prompt that would be sent.)\n\nSYSTEM:\n{system}\n\nUSER:\n{user}"
+    # Groq speaks the OpenAI API, so we use the OpenAI client pointed at Groq's URL.
+    client = OpenAI(api_key=os.environ["GROQ_API_KEY"], base_url="https://api.groq.com/openai/v1")
+    response = client.responses.create(model=LLM_MODEL, instructions=system, input=user)
+    return response.output_text
 
 
 # ---------- Stage 1: the problem. Ask an LLM with no sources ----------
@@ -229,8 +221,9 @@ def build_prompt(question: str, hits: list[tuple[Chunk, float]]) -> str:
 
 
 def cited_numbers(answer: str) -> list[int]:
-    """The source numbers an answer cites, e.g. 'see [1] and [3]' -> [1, 3]."""
-    return sorted({int(n) for n in re.findall(r"\[(\d+)\]", answer)})
+    """The source numbers an answer cites, e.g. 'see [1] and [3]' -> [1, 3].
+    Also accepts 【1】, which some models (like gpt-oss) write instead of [1]."""
+    return sorted({int(n) for n in re.findall(r"[\[【](\d+)[\]】]", answer)})
 
 
 # ---------- Stage 7: the confidence gate ----------

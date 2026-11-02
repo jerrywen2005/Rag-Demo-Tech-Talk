@@ -6,8 +6,8 @@ research policies. It's the demo for our COMP 523 tech talk, and it's the same p
 
 There's no framework and no database. It's about 400 lines of Python in three files you can read
 top to bottom, and you can follow along on your laptop. Embeddings and reranking run locally for
-free. Only the final answer uses an LLM (Claude), and that step is optional: with no API key, the
-demo prints the exact prompt it would send.
+free. Only the final answer uses an LLM (the open-weight `gpt-oss-20b`, through Groq's free tier),
+and that step is optional: with no API key, the demo prints the exact prompt it would send.
 
 ```
 question
@@ -31,8 +31,9 @@ pip install -r requirements.txt    # includes PyTorch, about 1 GB
 python demo.py eval                # first run downloads the two models (about 1.2 GB) and embeds the chunks
 ```
 
-**Optional, for real answers:** get an API key at <https://platform.claude.com> and run
-`export ANTHROPIC_API_KEY=sk-ant-...`. Without one, everything except the final LLM answer still works.
+**Optional, for real answers:** create a free API key at <https://console.groq.com/keys> and run
+`export GROQ_API_KEY=gsk_...`. Without one, everything except the LLM answers still works. Never
+commit your key.
 
 ## The files
 
@@ -59,13 +60,13 @@ only if you want fresh copies.
 ### Stage 1: the problem
 
 ```bash
-python demo.py nosources "How often do I need to complete FCOI training?"
+python demo.py nosources "How far in advance must a UNC postdoc request an extension of the five-year maximum term?"
 ```
 
-A plain LLM answers confidently from general knowledge. Federal rules say every four years, but
-UNC's policy says **annually** (plus some other triggers). The model has never seen UNC's policy and
-can't cite anything. RAG fixes this by retrieving the relevant policy text and making the model
-answer from it.
+A plain LLM answers confidently from general knowledge. In our runs it said **30 days**, and it
+sometimes made up the name of the policy or the office. UNC's Postdoctoral Scholar Policy says
+**90 days**. The model has never seen UNC's policy and can't cite anything. RAG fixes this by
+retrieving the relevant policy text and making the model answer from it.
 
 ### Stage 2: chunking
 
@@ -134,13 +135,17 @@ only on the 20 hybrid candidates and keep the top 5. It moves Export Controls to
 ### Stage 6: generation with citations
 
 ```bash
-python demo.py ask "How often do I need to complete FCOI training?"
+python demo.py ask "How far in advance must a UNC postdoc request an extension of the five-year maximum term?"
 ```
 
 The top 5 chunks go to the LLM as numbered sources, along with a **grounding prompt**
 (`GROUNDING_PROMPT` in `rag.py`): answer only from the sources, cite `[n]` after every claim, say
 when the sources don't cover something, and never make a compliance decision for the user. We parse
-the `[n]` citations back into policy sections and links. Compare this answer with stage 1's.
+the `[n]` citations back into policy sections and links. Compare this answer with stage 1's: it
+now says 90 days and cites the policy section.
+
+The LLM call is one function, `call_llm()`. Groq speaks the OpenAI API, so it uses the `openai`
+package pointed at Groq's URL. Swapping in another provider means changing only that function.
 
 ### Stage 7: the confidence gate
 
@@ -202,5 +207,6 @@ This demo is the core pipeline. In Nora, the same stages run inside a FastAPI + 
 - **`NOTE: Redirects are currently not supported in MacOs`** is a harmless PyTorch message.
 - **The first run is slow:** it downloads the models and embeds the chunks. Later runs reuse
   `~/.cache/huggingface` and `.cache/`.
-- **`ask` prints a prompt instead of an answer:** set `ANTHROPIC_API_KEY` (see Setup).
-- **Use a different Claude model:** `export RAG_LLM_MODEL=claude-haiku-5-5` (cheaper).
+- **`ask` prints a prompt instead of an answer:** set `GROQ_API_KEY` (see Setup).
+- **Use a different Groq model:** for example `export RAG_LLM_MODEL=openai/gpt-oss-120b`.
+- **Rate limit errors:** Groq's free tier limits requests per minute. Wait a minute and retry.
