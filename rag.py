@@ -1,14 +1,27 @@
 """A small RAG pipeline over 16 UNC research policies. One function per stage; see README.md."""
 
+import hashlib
 import json
 import os
 import re
 from dataclasses import dataclass
+from pathlib import Path
+
+# Quieter model loading, so the demo output stays readable.
+os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
+os.environ.setdefault("HF_HUB_VERBOSITY", "error")
+os.environ.setdefault("TRANSFORMERS_VERBOSITY", "error")
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
 import anthropic
+import numpy as np
+from sentence_transformers import SentenceTransformer
 
 LLM_MODEL = os.environ.get("RAG_LLM_MODEL", "claude-opus-5-5")
+EMBED_MODEL = "BAAI/bge-small-en-v1.5"  # small, free, runs on a laptop CPU
+QUERY_PREFIX = "Represent this sentence for searching relevant passages: "  # bge wants this on queries
 MAX_CHUNK_WORDS = 300  # roughly 400 tokens
+TOP_K = 5  # how many chunks we show the LLM
 
 
 def load_policies():
@@ -46,7 +59,7 @@ def ask_without_sources(question: str) -> str:
 # ---------- Stage 2: chunking ----------
 
 
-@dataclass
+@dataclass(eq=False)  # compare chunks by identity, so they can be dict keys
 class Chunk:
     doc: dict  # the policy this chunk came from (title, office, source_url, ...)
     section: str  # heading path, e.g. "2. Procedure > 2.1 Initial Determination"
@@ -96,3 +109,44 @@ def chunk_policy(doc: dict) -> list[Chunk]:
 
 def build_chunks() -> list[Chunk]:
     return [chunk for doc in load_policies() for chunk in chunk_policy(doc)]
+
+
+# ---------- The index: everything retrieval needs, built once ----------
+
+
+class Index:
+    def __init__(self):
+        self.chunks = build_chunks()
+        self.embedder = SentenceTransformer(EMBED_MODEL)
+        self.vectors = self.embed_chunks()
+
+    def embed_chunks(self) -> np.ndarray:
+        """Stage 3: one vector per chunk. Done once and cached; only questions are embedded per ask."""
+        texts = [c.text for c in self.chunks]
+        key = hashlib.sha1((EMBED_MODEL + "".join(texts)).encode()).hexdigest()[:12]
+        cache = Path(f".cache/vectors-{key}.npy")
+        if cache.exists():
+            return np.load(cache)
+        print(f"Embedding {len(texts)} chunks (once; cached in .cache/)...")
+        vectors = self.embedder.encode(texts, normalize_embeddings=True, show_progress_bar=True)
+        cache.parent.mkdir(exist_ok=True)
+        np.save(cache, vectors)
+        return vectors
+
+    # ---------- Stage 3: vector search ----------
+
+    def dense_search(self, question: str, k: int = 20) -> list[tuple[Chunk, float]]:
+        """Find chunks whose meaning is closest to the question (cosine similarity)."""
+        q = self.embedder.encode(QUERY_PREFIX + question, normalize_embeddings=True)
+        scores = self.vectors @ q  # vectors are normalized, so the dot product is the cosine
+        best = np.argsort(-scores)[:k]
+        return [(self.chunks[i], float(scores[i])) for i in best]
+
+    def search(self, question: str, mode: str) -> list[tuple[Chunk, float]]:
+        """Top chunks for a question, using one retrieval method (compared in demo.py and eval)."""
+        if mode == "dense":
+            return self.dense_search(question)[:TOP_K]
+        raise ValueError(f"unknown mode {mode}")
+
+
+MODES = ["dense"]
