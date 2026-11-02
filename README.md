@@ -52,10 +52,52 @@ gitignored, so your key is never committed. Without a key, everything except the
 streamlit run app.py      # opens http://localhost:8501
 ```
 
-The UI runs the same code as `demo.py` and has three tabs:
-- **Ask:** the LLM without sources and with RAG, side by side, plus the gate decision, the sources and the 5 retrieved chunks
-- **Compare retrieval:** the top 5 from vector, keyword, hybrid and reranked search
-- **Evaluation:** the results table, plus a slider to try different gate thresholds
+The UI runs the same code as `demo.py`. The left sidebar summarizes the pipeline. There are three tabs.
+
+**Ask tab** (stages 1, 6, 7)
+- **Question:** pick an example or type your own, then click **Ask**.
+- **Without sources** (left): the LLM answers from memory alone. This is stage 1, the problem.
+- **With RAG** (right): the full pipeline. A green box means it answered from the policies, with a
+  **Sources** list linking to each cited section. A yellow box means the gate referred the question
+  to an office instead of answering.
+- **Confidence gate line:** the best reranker score, the threshold, and whether the LLM was called.
+- **The 5 chunks retrieved:** exactly the text the LLM was given, numbered to match the `[n]`
+  citations.
+
+**Compare retrieval tab** (stages 3–5): the same question through each retrieval method, top 5
+each. Compare which *policy* comes out on top, not the score numbers (see below).
+
+**Evaluation tab** (stage 8)
+- **Is the expected policy found?** For the 20 answerable questions: how often each method ranked
+  the right policy #1, and how often it was anywhere in the top 5.
+- **The confidence gate:** drag the threshold slider and watch how many real questions get
+  answered and how many off-topic questions get referred. The mistakes table lists each question the
+  gate gets wrong at that threshold.
+
+## Reading the scores
+
+**For every score in this demo, higher means a better match.** Each method measures differently,
+though, so the numbers are on different scales. Compare scores within one method, never across methods.
+
+| Method | Score | Range | Why it looks like that |
+|---|---|---|---|
+| Vector search | Cosine similarity of the two embeddings | −1 to 1; in practice about 0.4–0.85 | Even unrelated text scores around 0.5 |
+| Keyword (BM25) | Sum over the question's words: how rare the word is × how often it appears in the chunk | 0 and up, **no maximum** | Values like 7 or 16 are normal. More matching words, and rarer ones, give bigger numbers. It's not "worse", just a different unit. |
+| Hybrid (RRF) | Sum of `1 / (60 + rank)` from the two lists | 0 to about **0.033** (#1 in both lists) | Tiny by design; only the ranks matter |
+| Reranker | The cross-encoder's relevance estimate | **0 to 1** | Close to 1: the chunk answers the question. Close to 0: it doesn't. |
+
+**Why the gate uses the reranker score.** Vector and keyword scores only *rank* chunks. They don't
+say whether the best one is any good. For "How do I get a parking permit?", the top vector score is
+0.58 and the top keyword score is 8.8, both normal-looking, even though no policy covers parking.
+The reranker scores that question 0.000, while a real question like "Who can be a PI on a sponsored
+project?" scores 0.97. It's the only score that means "relevant" on the same scale for every question.
+
+**The confidence gate and its threshold.** The gate is the check between retrieval and the LLM. If
+the best reranker score is **below the threshold (0.03)**, we don't call the LLM and refer the user
+to an office instead. Raising the threshold makes the gate stricter: it refers more, including some
+real questions. Lowering it lets more through, including off-topic ones the model would guess at.
+We set 0.03 from the eval, because the highest-scoring off-topic question scored 0.024.
+(It's a coincidence that hybrid scores are also around 0.03. The gate only looks at the reranker score.)
 
 The walkthrough below uses the terminal commands, because they show each stage on its own.
 

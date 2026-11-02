@@ -173,6 +173,12 @@ Ideas to choose from. Each one maps to what our demo does.
   Quality comes from chunking, the embedding model, hybrid search and reranking.
 - **Why does the eval only test retrieval?** Retrieval is where most failures start, and testing it
   is free and repeatable. Nora's eval will also check answers (correct outcome, the right sources cited).
+- **Why are the keyword scores so much bigger?** Every score is higher-is-better, but on its own
+  scale: cosine is −1 to 1, BM25 has no maximum, RRF tops out around 0.033, and the reranker is 0 to 1.
+  Compare scores within a method, never across. See "Reading the scores" in the README.
+- **Why does the gate use the reranker score?** Vector and keyword scores only rank chunks. An
+  off-topic question still gets normal-looking scores (parking: 0.58 cosine, 8.8 BM25). The reranker
+  gives it 0.000 and a real question about 0.97, so it's the only score that means "relevant".
 - **How did you pick the threshold (0.03)?** From the eval: the highest-scoring off-topic question
   scored 0.024, so 0.03 refers all 6. It has to be re-tuned whenever the reranker changes.
 - **Why Groq and gpt-oss?** It's free and fast, so anyone can follow along. The LLM is one
