@@ -254,3 +254,32 @@ def ask(index: Index, question: str) -> dict:
     # An answer that cites nothing isn't grounded in the sources, so flag it.
     outcome = "answered" if cited else "unsupported (cites no sources)"
     return {"outcome": outcome, "answer": answer, "hits": hits, "cited": cited}
+
+
+# ---------- Stage 8: evaluation ----------
+
+
+def evaluate(index: Index) -> dict:
+    """Run data/eval.json through retrieval (no LLM calls, so it's free).
+    Returns, per method, how many answerable questions found the expected policy at #1 and in the
+    top 5, plus each question's best reranker score so the gate can be checked at any threshold."""
+    questions = json.load(open("data/eval.json"))
+    runs = [(q, {mode: index.search(q["question"], mode) for mode in MODES}) for q in questions]
+    answerable = [(q, hits) for q, hits in runs if q["expected"]]
+    retrieval = {}
+    for mode in MODES:
+        top1 = sum(q["expected"] in hits[mode][0][0].doc["title"] for q, hits in answerable)
+        top5 = sum(any(q["expected"] in c.doc["title"] for c, _ in hits[mode]) for q, hits in answerable)
+        retrieval[mode] = (top1, top5)
+    scores = [(q["question"], bool(q["expected"]), hits["rerank"][0][1]) for q, hits in runs]
+    return {"answerable": len(answerable), "unanswerable": len(runs) - len(answerable),
+            "retrieval": retrieval, "scores": scores}
+
+
+def check_gate(scores: list[tuple[str, bool, float]], threshold: float) -> dict:
+    """How the gate does at a threshold: answerable questions answered, off-topic ones referred."""
+    answered = sum(answerable and score >= threshold for _, answerable, score in scores)
+    referred = sum(not answerable and score < threshold for _, answerable, score in scores)
+    mistakes = [(question, score, "referred" if answerable else "answered")
+                for question, answerable, score in scores if answerable != (score >= threshold)]
+    return {"answered": answered, "referred": referred, "mistakes": mistakes}

@@ -8,7 +8,6 @@
 """
 
 import argparse
-import json
 import random
 
 import rag
@@ -55,37 +54,21 @@ def cmd_ask(args):
 
 def cmd_eval(args):
     """Score each retrieval method and the gate on data/eval.json. No LLM calls, so it's free."""
-    index = rag.Index()
-    questions = json.load(open("data/eval.json"))
-    answerable = [q for q in questions if q["expected"]]
-    results = [{mode: index.search(q["question"], mode) for mode in rag.MODES} for q in questions]
-
-    def is_right(chunk, q):
-        return q["expected"] in chunk.doc["title"]
-
-    print(f"Retrieval, {len(answerable)} answerable questions (is the expected policy found?)")
+    result = rag.evaluate(rag.Index())
+    n = result["answerable"]
+    print(f"Retrieval, {n} answerable questions (is the expected policy found?)")
     print(f"  {'method':8}  {'top-1':>6}  {'top-5':>6}")
-    for mode in rag.MODES:
-        pairs = [(q, r[mode]) for q, r in zip(questions, results) if q["expected"]]
-        top1 = sum(is_right(hits[0][0], q) for q, hits in pairs)
-        top5 = sum(any(is_right(c, q) for c, _ in hits) for q, hits in pairs)
-        print(f"  {mode:8}  {top1:>3}/{len(pairs)}  {top5:>3}/{len(pairs)}")
+    for mode, (top1, top5) in result["retrieval"].items():
+        print(f"  {mode:8}  {top1:>3}/{n}  {top5:>3}/{n}")
 
+    gate = rag.check_gate(result["scores"], args.gate)
     print(f"\nGate at {args.gate} (best reranker score below it = refer, don't answer)")
-    answered = referred = 0
-    mistakes = []
-    for q, r in zip(questions, results):
-        score = r["rerank"][0][1]
-        if q["expected"] and score >= args.gate:
-            answered += 1
-        elif not q["expected"] and score < args.gate:
-            referred += 1
-        else:
-            mistakes.append(f"  {score:.4f}  {'referred' if q['expected'] else 'answered'}: {q['question']}")
-    print(f"  answerable questions answered:    {answered}/{len(answerable)}")
-    print(f"  unanswerable questions referred:  {referred}/{len(questions) - len(answerable)}")
-    if mistakes:
-        print("Gate mistakes:\n" + "\n".join(mistakes))
+    print(f"  answerable questions answered:    {gate['answered']}/{n}")
+    print(f"  unanswerable questions referred:  {gate['referred']}/{result['unanswerable']}")
+    if gate["mistakes"]:
+        print("Gate mistakes:")
+        for question, score, what in gate["mistakes"]:
+            print(f"  {score:.4f}  {what}: {question}")
 
 
 def main():
