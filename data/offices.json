@@ -1,0 +1,44 @@
+{
+  "ovcr": {
+    "name": "Office of the Vice Chancellor for Research",
+    "email": null,
+    "phone": null,
+    "url": "https://research.unc.edu/"
+  },
+  "ohre": {
+    "name": "Office of Human Research Ethics",
+    "email": "irb_questions@unc.edu",
+    "phone": "919-966-3113",
+    "url": "https://research.unc.edu/human-research-ethics/"
+  },
+  "coi": {
+    "name": "Conflict of Interest Office",
+    "email": "coi@unc.edu",
+    "phone": "919-843-9953",
+    "url": "https://research.unc.edu/compliance/coi/contact/"
+  },
+  "osp": {
+    "name": "Office of Sponsored Programs",
+    "email": "SponsoredPrograms@unc.edu",
+    "phone": "919-966-3411",
+    "url": "https://osp.unc.edu/"
+  },
+  "oacu": {
+    "name": "Office of Animal Care and Use",
+    "email": "iacuc@med.unc.edu",
+    "phone": "919-966-5569",
+    "url": "https://research.unc.edu/iacuc/"
+  },
+  "export": {
+    "name": "Export Compliance Office",
+    "email": "exportcontrol@unc.edu",
+    "phone": null,
+    "url": "https://research.unc.edu/compliance/export-controls/"
+  },
+  "opa": {
+    "name": "Office of Postdoctoral Affairs",
+    "email": "opa@unc.edu",
+    "phone": "919-962-9982",
+    "url": "https://research.unc.edu/postdocs/"
+  }
+}
