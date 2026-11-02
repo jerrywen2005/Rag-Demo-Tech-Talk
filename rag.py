@@ -15,6 +15,7 @@ os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
 import anthropic
 import numpy as np
+from rank_bm25 import BM25Okapi
 from sentence_transformers import SentenceTransformer
 
 LLM_MODEL = os.environ.get("RAG_LLM_MODEL", "claude-opus-5-5")
@@ -111,6 +112,21 @@ def build_chunks() -> list[Chunk]:
     return [chunk for doc in load_policies() for chunk in chunk_policy(doc)]
 
 
+def tokenize(text: str) -> list[str]:
+    """Lowercase words and numbers, keeping codes like '200.03' whole."""
+    return re.findall(r"[a-z0-9]+(?:\.[0-9]+)*", text.lower())
+
+
+def rrf(*rankings: list[tuple[Chunk, float]], k: int = 60) -> list[tuple[Chunk, float]]:
+    """Reciprocal Rank Fusion: merge ranked lists by rank, not score (their scores aren't comparable).
+    Each list gives a chunk 1 / (60 + rank); a chunk near the top of both lists wins."""
+    fused: dict[Chunk, float] = {}
+    for ranking in rankings:
+        for rank, (chunk, _) in enumerate(ranking, 1):
+            fused[chunk] = fused.get(chunk, 0) + 1 / (k + rank)
+    return sorted(fused.items(), key=lambda item: -item[1])
+
+
 # ---------- The index: everything retrieval needs, built once ----------
 
 
@@ -119,6 +135,7 @@ class Index:
         self.chunks = build_chunks()
         self.embedder = SentenceTransformer(EMBED_MODEL)
         self.vectors = self.embed_chunks()
+        self.bm25 = BM25Okapi([tokenize(c.text) for c in self.chunks])
 
     def embed_chunks(self) -> np.ndarray:
         """Stage 3: one vector per chunk. Done once and cached; only questions are embedded per ask."""
@@ -142,11 +159,26 @@ class Index:
         best = np.argsort(-scores)[:k]
         return [(self.chunks[i], float(scores[i])) for i in best]
 
+    # ---------- Stage 4: keyword search (BM25) and hybrid ----------
+
+    def keyword_search(self, question: str, k: int = 20) -> list[tuple[Chunk, float]]:
+        """Score chunks by shared words, weighting rare words (like 'FCOI' or '1101') most."""
+        scores = self.bm25.get_scores(tokenize(question))
+        best = np.argsort(-scores)[:k]
+        return [(self.chunks[i], float(scores[i])) for i in best]
+
+    def hybrid_search(self, question: str, k: int = 20) -> list[tuple[Chunk, float]]:
+        return rrf(self.dense_search(question), self.keyword_search(question))[:k]
+
     def search(self, question: str, mode: str) -> list[tuple[Chunk, float]]:
         """Top chunks for a question, using one retrieval method (compared in demo.py and eval)."""
         if mode == "dense":
             return self.dense_search(question)[:TOP_K]
+        if mode == "keyword":
+            return self.keyword_search(question)[:TOP_K]
+        if mode == "hybrid":
+            return self.hybrid_search(question)[:TOP_K]
         raise ValueError(f"unknown mode {mode}")
 
 
-MODES = ["dense"]
+MODES = ["dense", "keyword", "hybrid"]
