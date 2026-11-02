@@ -16,11 +16,14 @@ os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 import anthropic
 import numpy as np
 from rank_bm25 import BM25Okapi
-from sentence_transformers import SentenceTransformer
+from sentence_transformers import CrossEncoder, SentenceTransformer
 
 LLM_MODEL = os.environ.get("RAG_LLM_MODEL", "claude-opus-5-5")
 EMBED_MODEL = "BAAI/bge-small-en-v1.5"  # small, free, runs on a laptop CPU
 QUERY_PREFIX = "Represent this sentence for searching relevant passages: "  # bge wants this on queries
+# Free and local. We tried the smaller cross-encoder/ms-marco-MiniLM-L-6-v2 first: it ranked worse on
+# our eval and its scores couldn't tell off-topic questions apart, which the gate (stage 7) needs.
+RERANK_MODEL = "BAAI/bge-reranker-base"
 MAX_CHUNK_WORDS = 300  # roughly 400 tokens
 TOP_K = 5  # how many chunks we show the LLM
 
@@ -136,6 +139,7 @@ class Index:
         self.embedder = SentenceTransformer(EMBED_MODEL)
         self.vectors = self.embed_chunks()
         self.bm25 = BM25Okapi([tokenize(c.text) for c in self.chunks])
+        self.reranker = CrossEncoder(RERANK_MODEL)
 
     def embed_chunks(self) -> np.ndarray:
         """Stage 3: one vector per chunk. Done once and cached; only questions are embedded per ask."""
@@ -170,6 +174,19 @@ class Index:
     def hybrid_search(self, question: str, k: int = 20) -> list[tuple[Chunk, float]]:
         return rrf(self.dense_search(question), self.keyword_search(question))[:k]
 
+    # ---------- Stage 5: reranking ----------
+
+    def rerank(self, question: str, candidates: list[tuple[Chunk, float]]) -> list[tuple[Chunk, float]]:
+        """A cross-encoder reads the question and each chunk together and scores how well it answers.
+        More accurate than comparing embeddings, but slow, so only the ~20 hybrid candidates get it."""
+        scores = self.reranker.predict([(question, chunk.text) for chunk, _ in candidates])
+        ranked = sorted(zip([c for c, _ in candidates], scores), key=lambda item: -item[1])
+        return [(chunk, float(score)) for chunk, score in ranked]
+
+    def retrieve(self, question: str) -> list[tuple[Chunk, float]]:
+        """The full retrieval pipeline: hybrid search for 20 candidates, rerank, keep the top 5."""
+        return self.rerank(question, self.hybrid_search(question))[:TOP_K]
+
     def search(self, question: str, mode: str) -> list[tuple[Chunk, float]]:
         """Top chunks for a question, using one retrieval method (compared in demo.py and eval)."""
         if mode == "dense":
@@ -178,7 +195,9 @@ class Index:
             return self.keyword_search(question)[:TOP_K]
         if mode == "hybrid":
             return self.hybrid_search(question)[:TOP_K]
+        if mode == "rerank":
+            return self.retrieve(question)
         raise ValueError(f"unknown mode {mode}")
 
 
-MODES = ["dense", "keyword", "hybrid"]
+MODES = ["dense", "keyword", "hybrid", "rerank"]
