@@ -14,9 +14,12 @@ os.environ.setdefault("TRANSFORMERS_VERBOSITY", "error")
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
 import numpy as np
+from dotenv import load_dotenv
 from openai import OpenAI
 from rank_bm25 import BM25Okapi
 from sentence_transformers import CrossEncoder, SentenceTransformer
+
+load_dotenv()  # reads GROQ_API_KEY from a .env file, if there is one (it's gitignored)
 
 LLM_MODEL = os.environ.get("RAG_LLM_MODEL", "openai/gpt-oss-20b")  # served by Groq (free tier)
 EMBED_MODEL = "BAAI/bge-small-en-v1.5"  # small, free, runs on a laptop CPU

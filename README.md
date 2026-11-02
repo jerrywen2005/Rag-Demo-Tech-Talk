@@ -31,9 +31,9 @@ pip install -r requirements.txt    # includes PyTorch, about 1 GB
 python demo.py eval                # first run downloads the two models (about 1.2 GB) and embeds the chunks
 ```
 
-**Optional, for real answers:** create a free API key at <https://console.groq.com/keys> and run
-`export GROQ_API_KEY=gsk_...`. Without one, everything except the LLM answers still works. Never
-commit your key.
+**Optional, for real answers:** create a free API key at <https://console.groq.com/keys>, then
+`cp .env.example .env` and paste the key into `.env`. It's loaded automatically, and `.env` is
+gitignored, so your key is never committed. Without a key, everything except the LLM answers still works.
 
 ## The files
 
@@ -210,6 +210,6 @@ This demo is the core pipeline. In Nora, the same stages run inside a FastAPI + 
 - **`NOTE: Redirects are currently not supported in MacOs`** is a harmless PyTorch message.
 - **The first run is slow:** it downloads the models and embeds the chunks. Later runs reuse
   `~/.cache/huggingface` and `.cache/`.
-- **`ask` prints a prompt instead of an answer:** set `GROQ_API_KEY` (see Setup).
+- **`ask` prints a prompt instead of an answer:** put your key in `.env` (see Setup).
 - **Use a different Groq model:** for example `export RAG_LLM_MODEL=openai/gpt-oss-120b`.
 - **Rate limit errors:** Groq's free tier limits requests per minute. Wait a minute and retry.
