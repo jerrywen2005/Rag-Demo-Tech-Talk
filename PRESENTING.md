@@ -1,119 +1,134 @@
 # Presenting the demo
 
-How to run the live demo in our 20-minute RAG tech talk (Mon Nov 2), including questions.
-[README.md](README.md) explains how each stage works. This page covers what to type and what to say.
+How to run our 20-minute RAG tech talk (Mon Nov 2), including questions.
+[README.md](README.md) explains how each stage works. This page covers who does what, what to type,
+and what to say.
 
-## The story in one line
+## The talk
 
-A plain LLM gets UNC policy wrong. We fix it one stage at a time, and the eval numbers show each
-stage helping.
+| Time (suggested) | Part | Who | Covers |
+|---|---|---|---|
+| 0:00–1:30 | Intro | Andy | The team, Nora (a policy Q&A assistant for UNC researchers), what the talk covers |
+| 1:30–4:00 | Why RAG | Adithi | LLMs don't know your documents and guess confidently; RAG retrieves the right text and makes the model answer from it |
+| 4:00–8:00 | Technical | Anton | The pipeline diagram (README top): chunking, embeddings, BM25, RRF, reranking, the gate |
+| 8:00–14:00 | RAG demo | Jerry | Live demo, below (recorded video as backup) |
+| 14:00–16:30 | Different ways to do RAG / real world | Andy | See "Talking points for Andy" below |
+| 16:30–20:00 | Q&A | All | See "Likely questions" |
+
+**Handoffs:**
+- Adithi's "LLMs guess" point is proven by the demo's first command, so she can say "Jerry will show
+  this live."
+- Anton explains the concepts, so the demo doesn't re-explain them. Jerry just points at where each
+  one shows up in the output. Use the same names in the slides: chunk, embedding, BM25, RRF,
+  reranker, gate.
+- The demo ends on the eval numbers and the gate trade-off, which leads into Andy's "what a real
+  app adds".
 
 ## Before the talk
 
-- [ ] Run the setup in the README on the laptop you'll present from, then run every command below
-      once. That downloads the models and builds `.cache/`, so nothing downloads live.
-- [ ] `export ANTHROPIC_API_KEY=...` in the presenting terminal. Check with
-      `python demo.py ask "How often do I need to complete FCOI training?"`: you should get an
-      answer, not a printed prompt.
-- [ ] Rehearse stage 1 and read what the model actually says. We expect it to give the federal
-      "every four years" rule instead of UNC's "annually". If it doesn't, pick another question it
-      gets wrong and rehearse with that one.
+- [ ] Run the README setup on the presenting laptop, then run every demo command once, so the
+      models and `.cache/` exist and nothing downloads live.
+- [ ] Set `GROQ_API_KEY` in your shell profile (`~/.zshrc`) **before** you start presenting or
+      recording, so the key never appears on screen. Never run `echo $GROQ_API_KEY` on camera.
+- [ ] Record the backup video (below).
 - [ ] Use a large terminal font, a dark background, and a window about 120 columns wide (the
-      `search` output is wide).
-- [ ] Save backups in case the Wi-Fi or the API fails:
-      ```bash
-      mkdir -p backup
-      python demo.py nosources "How often do I need to complete FCOI training?" > backup/1-nosources.txt
-      python demo.py ask "How often do I need to complete FCOI training?" > backup/6-ask.txt
-      ```
-      Only stages 1 and 6 need the internet. Everything else runs offline.
+      `search` output is wide). Run `clear` between commands.
 - [ ] Put the repo link on the last slide so people can follow along later.
 
-## Run of show (suggested split; change it as a team)
+## The demo (Jerry, about 6 minutes)
 
-| Time | Who | Stage | What happens |
-|---|---|---|---|
-| 0:00–2:30 | Andy | Why RAG + stage 1 | Nora in one sentence, then a plain LLM gets the training rule wrong |
-| 2:30–6:00 | Anton | Stages 2–3 | Chunking, embeddings, a paraphrase found by meaning |
-| 6:00–9:30 | Anton | Stages 4–5 | ITAR: keyword wins, hybrid buries it, reranker fixes it |
-| 9:30–13:00 | Jerry | Stages 6–7 | Grounded answer with citations; parking question gets referred |
-| 13:00–15:30 | Adithi | Stage 8 + wrap-up | Eval table, the gate trade-off, what Nora adds, repo link |
-| 15:30–20:00 | All | Q&A | |
+Copy and paste these, in order. Each block says what to point at.
 
-## The commands, in order
-
-Copy and paste these. Each block says what to point at.
-
-**Stage 1: the problem (Andy)**
+**1. The problem, LLM without sources (about 1 min)**
 ```bash
-python demo.py nosources "How often do I need to complete FCOI training?"
+python demo.py nosources "How far in advance must a UNC postdoc request an extension of the five-year maximum term?"
 ```
-Point at: it sounds confident, cites nothing, and (if rehearsal confirmed it) gives the federal
-four-year rule. UNC's policy says annually. "It has never read UNC's policy. RAG gives it the policy."
+Point at: it sounds confident and official, and in rehearsal it said **30 days**, sometimes naming a
+policy or office that doesn't exist. The real policy says **90 days**. "It has never read UNC's
+policy, so it guessed."
 
-**Stage 2: chunking (Anton)**
+**2. Chunks (about 30 s)**
 ```bash
 python demo.py chunks
 ```
 Point at: 272 chunks. Each one starts with a header (policy title > section path) and never cuts
-mid-paragraph. "The header tells the model, and the user, where the text came from."
+mid-paragraph.
 
-**Stage 3: embeddings (Anton)**
-```bash
-python demo.py search "Can I take my lab notebooks with me when I move to another university?" --mode dense
-```
-Point at: #1 is Research Data Ownership > Use and Transfer of Research Data, though the policy never
-says "notebook" or "move". "Embeddings match meaning, not words."
-
-**Stages 4–5: hybrid and reranking (Anton)**
+**3. Retrieval, the key moment (about 1.5 min)**
 ```bash
 python demo.py search "Is ITAR relevant to my lab?"
 ```
 Point at, from top to bottom:
-1. `[dense]`: the animal-care policy. Wrong. The embedding doesn't know the acronym.
-2. `[keyword]`: Export Controls at #1. BM25 matches the rare exact word "ITAR".
-3. `[hybrid]`: RRF merged the lists, and Export Controls is in the top 5, but only at #5.
-4. `[rerank]`: the cross-encoder reads question and chunk together and moves it to #1.
+1. `[dense]`: the animal-care policy. Wrong. The embedding doesn't know the acronym "ITAR".
+2. `[keyword]`: Export Controls at #1. BM25 matches the rare exact word.
+3. `[hybrid]`: RRF merged both lists. Export Controls is in, but only at #5.
+4. `[rerank]`: the reranker reads question and chunk together and moves it to #1.
 
-Optional, if time allows (the opposite case, where keyword search fails):
+**4. The grounded answer (about 1 min)**
 ```bash
-python demo.py search "Am I allowed to take my laptop to China for a conference?" --mode keyword
+python demo.py ask "How far in advance must a UNC postdoc request an extension of the five-year maximum term?"
 ```
+Point at: the retrieved chunks and their high scores, **90 days** with a `[1]` citation, and the link
+to the policy at the bottom. "Same question as the first command, now right and checkable."
 
-**Stage 6: grounded answer (Jerry)**
-```bash
-python demo.py ask "How often do I need to complete FCOI training?"
-```
-Point at: the retrieved chunks and their scores, the `[1]` citations in the answer, the source
-links at the bottom, and that it now says annually. Briefly show `GROUNDING_PROMPT` in `rag.py`.
-
-**Stage 7: the gate (Jerry)**
+**5. Refusing to guess (about 30 s)**
 ```bash
 python demo.py ask "How do I get a parking permit?"
 ```
-Point at: every reranker score is about 0, so outcome is `referred`. The LLM was never called, so
-the refusal cost nothing and couldn't be a guess.
+Point at: every reranker score is about 0, so the outcome is `referred`. The LLM was never called,
+so the refusal cost nothing and can't be a guess.
 
-**Stage 8: evaluation (Adithi)**
+**6. Measuring it (about 1.5 min)**
 ```bash
 python demo.py eval
 ```
-Point at: top-1 goes from 16/20 (vector search) to 20/20 (with reranking). Hybrid alone scores
-*lower* at #1 (14/20) but finds the right chunk in the top 5; the reranker puts it in order.
-Then the gate: 6/6 off-topic questions referred, but 3 real questions also referred. "We'd rather
-refer than guess. Nora will add a glossary for acronyms and synonyms to win those back." To show
-the trade-off, run `python demo.py eval --gate 0.001`: now off-topic questions get answered.
+Point at: the expected policy at #1 goes from 16/20 with vector search alone to 20/20 with
+reranking. Hybrid alone is *lower* at #1 (14/20) but gets the right chunk into the top 5, and the
+reranker puts it in order. Then the gate: all 6 off-topic questions referred, but 3 real,
+casually worded questions also referred. "We chose to refer rather than guess." That leads into Andy.
 
-**Wrap-up (Adithi):** the "What a production app adds" list from the README, and the repo link.
+If you have spare time: `python demo.py search "Am I allowed to take my laptop to China for a conference?"`
+is the opposite case. Vector search finds Export Controls and keyword search doesn't, because the
+policy never says "laptop" or "China".
 
-## If something breaks
+## Recording the backup video
 
-- **No internet or the API fails:** `cat backup/1-nosources.txt` / `cat backup/6-ask.txt`. Every
-  other stage runs offline.
-- **A command is slow the first time:** the models weren't cached. Keep talking. It's about a
-  minute, once.
-- **The LLM answer differs from rehearsal:** that's normal, since LLM output varies. Point at the
-  citations and the source links, not the exact wording.
+Record after the models are cached and the key is set, so there's no waiting and no secrets on screen.
+
+1. Open the terminal with a big font, then press **Cmd+Shift+5** (macOS) and choose "Record Selected
+   Portion" around the terminal window. QuickTime's "New Screen Recording" also works.
+2. Run the six commands above in order, saying what you'd say live. Pause briefly on each output.
+3. Keep it under about 6 minutes. If the first `search` or `ask` is slow, cut the wait in editing.
+4. Put the video on the presenting laptop itself, not only in the cloud, and test that it plays.
+
+LLM answers vary from run to run, so the video won't match the live run word for word. That's fine.
+If it comes up, say so and point at the citations and links.
+
+## If something breaks live
+
+- **The Groq API fails or the Wi-Fi drops:** switch to the video. Commands 2, 3, 5 and 6 work
+  offline, so you can also keep going live and play only the video's commands 1 and 4.
+- **A command is slow:** the models weren't cached. Keep talking. It's about a minute, once.
+- **A rate limit error:** Groq's free tier limits requests per minute. Wait a moment or switch to the video.
+- **The answer looks different from rehearsal:** normal. Point at the citations, not the wording.
+
+## Talking points for Andy (different ways to do RAG / real world)
+
+Ideas to choose from. Each one maps to what our demo does.
+
+- **Where vectors live:** we used a NumPy array (272 chunks). Real apps use a vector index:
+  pgvector inside Postgres (what Nora uses), or a hosted vector database (Pinecone, Weaviate).
+- **Frameworks:** LangChain and LlamaIndex package these steps. They're faster to start with but
+  hide what happens. We wrote ours by hand to teach it and to control the refusal behavior.
+- **Hosted vs local models:** we ran embeddings and reranking locally for free. Hosted options
+  (OpenAI or Voyage embeddings, Cohere Rerank) can score higher but send your text to a third party.
+  That matters for UNC data.
+- **Fancier retrieval:** query rewriting (fix vague questions before searching), contextual
+  retrieval (our context headers are a simple version), and agentic RAG (the model decides when and
+  what to search).
+- **Real world (Nora):** the same pipeline in FastAPI + Postgres, with filters for active
+  policies, referrals to the right office per topic, logging every question, and the eval running
+  on every change. See "What a production app adds" in the README.
 
 ## Likely questions
 
@@ -128,8 +143,10 @@ the trade-off, run `python demo.py eval --gate 0.001`: now off-topic questions g
   is free and repeatable. Nora's eval will also check answers (correct outcome, the right sources cited).
 - **How did you pick the threshold (0.03)?** From the eval: the highest-scoring off-topic question
   scored 0.024, so 0.03 refers all 6. It has to be re-tuned whenever the reranker changes.
-- **Why Claude, and does data leave UNC?** The question and the 5 chunks go to the LLM API.
-  Embeddings and reranking run locally. UNC hasn't approved an LLM provider for Nora yet, so the LLM
-  sits behind one function that we can swap out.
+- **Why Groq and gpt-oss?** It's free and fast, so anyone can follow along. The LLM is one
+  function (`call_llm`), so swapping providers is a small change. UNC hasn't approved an LLM
+  provider for Nora yet.
+- **Does data leave your machine?** Only the question and the 5 retrieved chunks, sent to the LLM.
+  Embeddings and reranking run locally.
 - **Can it handle follow-up questions?** Not yet. A follow-up would first be rewritten into a
   standalone question before retrieval.
