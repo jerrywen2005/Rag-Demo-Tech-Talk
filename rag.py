@@ -26,6 +26,9 @@ QUERY_PREFIX = "Represent this sentence for searching relevant passages: "  # bg
 RERANK_MODEL = "BAAI/bge-reranker-base"
 MAX_CHUNK_WORDS = 300  # roughly 400 tokens
 TOP_K = 5  # how many chunks we show the LLM
+# Below this best reranker score we don't call the LLM; we refer the user to an office instead.
+# Set from data/eval.json (python demo.py eval). Re-tune it if you change the reranker.
+GATE_THRESHOLD = 0.03
 
 
 def load_policies():
@@ -35,9 +38,13 @@ def load_policies():
 # ---------- The LLM call (used by stages 1 and 6) ----------
 
 
+def have_llm_key() -> bool:
+    return bool(os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN"))
+
+
 def call_llm(system: str, user: str) -> str:
     """Send one message to Claude. Without an API key, print the prompt instead so you can still follow."""
-    if not (os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN")):
+    if not have_llm_key():
         return f"(No ANTHROPIC_API_KEY set, so here is the prompt that would be sent.)\n\nSYSTEM:\n{system}\n\nUSER:\n{user}"
     response = anthropic.Anthropic().beta.messages.create(
         model=LLM_MODEL,
@@ -226,9 +233,28 @@ def cited_numbers(answer: str) -> list[int]:
     return sorted({int(n) for n in re.findall(r"\[(\d+)\]", answer)})
 
 
+# ---------- Stage 7: the confidence gate ----------
+
+REFERRAL_OFFICE = json.load(open("data/offices.json"))["ovcr"]
+
+
+def referral() -> str:
+    office = REFERRAL_OFFICE
+    return (f"I couldn't find this in the UNC research policies I have, so I won't guess. "
+            f"Please contact the {office['name']}: {office['url']}")
+
+
 def ask(index: Index, question: str) -> dict:
-    """The whole pipeline: retrieve, then answer from the retrieved chunks, with citations."""
+    """The whole pipeline: retrieve, gate, then answer from the retrieved chunks, with citations."""
     hits = index.retrieve(question)
+    if hits[0][1] < GATE_THRESHOLD:
+        # Even the best chunk is a poor match. Skip the LLM (free and fast) and refer instead.
+        return {"outcome": "referred", "answer": referral(), "hits": hits, "cited": []}
+
     answer = call_llm(GROUNDING_PROMPT, build_prompt(question, hits))
+    if not have_llm_key():
+        return {"outcome": "prompt only (no API key)", "answer": answer, "hits": hits, "cited": []}
     cited = [hits[n - 1][0] for n in cited_numbers(answer) if 1 <= n <= len(hits)]
-    return {"outcome": "answered", "answer": answer, "hits": hits, "cited": cited}
+    # An answer that cites nothing isn't grounded in the sources, so flag it.
+    outcome = "answered" if cited else "unsupported (cites no sources)"
+    return {"outcome": outcome, "answer": answer, "hits": hits, "cited": cited}
